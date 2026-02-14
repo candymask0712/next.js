@@ -319,9 +319,13 @@ function InnerScrollHandlerNew(props: ScrollAndMaybeFocusHandlerProps) {
           'blur' in activeElement &&
           typeof activeElement.blur === 'function'
         ) {
-          // Matching hard navigations so that the focus cursor is before the new segment
-          // There might be more content before the new segment but that's better
-          // than staying on the link that triggered the navigation.
+          // Trying to match hard navigations.
+          // Ideally we'd move the internal focus cursor either to the top
+          // or at least before the segment. But there's no DOM API to do that,
+          // so we just blur.
+          // We could workaround this by moving focus to a temporary element in
+          // the body. But adding elements might trigger layout or other effects
+          // so it should be well motivated.
           activeElement.blur()
         }
 
