@@ -13,7 +13,6 @@ import { ReflectAdapter } from '../web/spec-extension/adapters/reflect'
 import {
   throwToInterruptStaticGeneration,
   postponeWithTracking,
-  delayUntilRuntimeStage,
 } from '../app-render/dynamic-rendering'
 
 import {
@@ -32,6 +31,7 @@ import {
   wellKnownProperties,
 } from '../../shared/lib/utils/reflect-utils'
 import {
+  delayUntilRuntimeStage,
   makeDevtoolsIOAwarePromise,
   makeHangingPromise,
 } from '../dynamic-rendering-utils'
@@ -79,11 +79,14 @@ export function createParamsFromClient(
           // but since you would never use next dev with production NODE_ENV we use this
           // as a proxy so we can statically exclude this code from production builds.
           const devFallbackParams = workUnitStore.devFallbackParams
+          // Client params are not runtime prefetchable
+          const isRuntimePrefetchable = false
           return createRenderParamsInDev(
             underlyingParams,
             devFallbackParams,
             workStore,
-            workUnitStore
+            workUnitStore,
+            isRuntimePrefetchable
           )
         } else {
           return createRenderParamsInProd(underlyingParams)
@@ -96,6 +99,8 @@ export function createParamsFromClient(
 }
 
 // generateMetadata always runs in RSC context so it is equivalent to a Server Page Component
+// TODO: metadata should inherit the runtime prefetchability of the page segment
+const metadataIsRuntimePrefetchable = false
 export type CreateServerParamsForMetadata = typeof createServerParamsForMetadata
 export function createServerParamsForMetadata(
   underlyingParams: Params,
@@ -105,7 +110,8 @@ export function createServerParamsForMetadata(
   return createServerParamsForServerSegment(
     underlyingParams,
     workStore,
-    metadataVaryParamsAccumulator
+    metadataVaryParamsAccumulator,
+    metadataIsRuntimePrefetchable
   )
 }
 
@@ -146,11 +152,14 @@ export function createServerParamsForRoute(
           // but since you would never use next dev with production NODE_ENV we use this
           // as a proxy so we can statically exclude this code from production builds.
           const devFallbackParams = workUnitStore.devFallbackParams
+          // Route params are not runtime prefetchable
+          const isRuntimePrefetchable = false
           return createRenderParamsInDev(
             underlyingParams,
             devFallbackParams,
             workStore,
-            workUnitStore
+            workUnitStore,
+            isRuntimePrefetchable
           )
         } else {
           return createRenderParamsInProd(underlyingParams)
@@ -165,7 +174,8 @@ export function createServerParamsForRoute(
 export function createServerParamsForServerSegment(
   underlyingParams: Params,
   workStore: WorkStore,
-  varyParamsAccumulator: VaryParamsAccumulator | null = null
+  varyParamsAccumulator: VaryParamsAccumulator | null,
+  isRuntimePrefetchable: boolean
 ): Promise<Params> {
   const workUnitStore = workUnitAsyncStorage.getStore()
   if (workUnitStore) {
@@ -202,7 +212,8 @@ export function createServerParamsForServerSegment(
             underlyingParams,
             devFallbackParams,
             workStore,
-            workUnitStore
+            workUnitStore,
+            isRuntimePrefetchable
           )
         } else {
           return createRenderParamsInProd(underlyingParams)
@@ -348,7 +359,8 @@ function createRenderParamsInDev(
   underlyingParams: Params,
   devFallbackParams: OpaqueFallbackRouteParams | null | undefined,
   workStore: WorkStore,
-  requestStore: RequestStore
+  requestStore: RequestStore,
+  isRuntimePrefetchable: boolean
 ): Promise<Params> {
   let hasFallbackParams = false
   if (devFallbackParams) {
@@ -364,7 +376,8 @@ function createRenderParamsInDev(
     underlyingParams,
     hasFallbackParams,
     workStore,
-    requestStore
+    requestStore,
+    isRuntimePrefetchable
   )
 }
 
@@ -497,7 +510,8 @@ function makeDynamicallyTrackedParamsWithDevWarnings(
   underlyingParams: Params,
   hasFallbackParams: boolean,
   workStore: WorkStore,
-  requestStore: RequestStore
+  requestStore: RequestStore,
+  isRuntimePrefetchable: boolean
 ): Promise<Params> {
   if (requestStore.asyncApiPromises && hasFallbackParams) {
     // We wrap each instance of params in a `new Promise()`, because deduping
@@ -505,7 +519,9 @@ function makeDynamicallyTrackedParamsWithDevWarnings(
     // await a different set of values. This is important when all awaits
     // are in third party which would otherwise track all the way to the
     // internal params.
-    const sharedParamsParent = requestStore.asyncApiPromises.sharedParamsParent
+    const sharedParamsParent = isRuntimePrefetchable
+      ? requestStore.asyncApiPromises.sharedParamsParent
+      : requestStore.asyncApiPromises.earlySharedParamsParent
     const promise: Promise<Params> = new Promise((resolve, reject) => {
       sharedParamsParent.then(() => resolve(underlyingParams), reject)
     })

@@ -25,7 +25,6 @@ import type {
   WorkUnitStore,
   PrerenderStoreLegacy,
   PrerenderStoreModern,
-  PrerenderStoreModernRuntime,
 } from '../app-render/work-unit-async-storage.external'
 
 // Once postpone is in stable we should switch to importing the postpone export directly
@@ -1149,16 +1148,4 @@ export function getNavigationDisallowedDynamicReasons(
   }
   // We had a non-empty prelude and there are no dynamic holes
   return []
-}
-
-export function delayUntilRuntimeStage<T>(
-  prerenderStore: PrerenderStoreModernRuntime,
-  result: Promise<T>
-): Promise<T> {
-  if (prerenderStore.stagedRendering) {
-    return prerenderStore.stagedRendering
-      .waitForStage(RenderStage.Runtime)
-      .then(() => result)
-  }
-  return result
 }
